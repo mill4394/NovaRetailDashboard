@@ -322,6 +322,7 @@ def format_chart(
         marker_line_width=0,
         textposition="outside",
         cliponaxis=False,
+        selector=dict(type="bar"),
     )
     return figure
 
