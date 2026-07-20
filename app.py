@@ -300,10 +300,31 @@ st.caption(
 st.divider()
 st.subheader("Executive Summary")
 
-top_segment_row = segment_revenue.iloc[0]
-top_region_row = revenue_summary("CustomerRegion").iloc[0]
-top_channel_row = revenue_summary("RetailChannel").iloc[0]
-lowest_satisfaction_row = segment_satisfaction.iloc[-1]
+summary_segment_revenue = (
+    filtered_df.groupby("label", as_index=False)["PurchaseAmount"]
+    .sum()
+    .sort_values("PurchaseAmount", ascending=False)
+)
+summary_region_revenue = (
+    filtered_df.groupby("CustomerRegion", as_index=False)["PurchaseAmount"]
+    .sum()
+    .sort_values("PurchaseAmount", ascending=False)
+)
+summary_channel_revenue = (
+    filtered_df.groupby("RetailChannel", as_index=False)["PurchaseAmount"]
+    .sum()
+    .sort_values("PurchaseAmount", ascending=False)
+)
+summary_segment_satisfaction = (
+    filtered_df.groupby("label", as_index=False)["CustomerSatisfaction"]
+    .mean()
+    .sort_values("CustomerSatisfaction", ascending=False)
+)
+
+top_segment_row = summary_segment_revenue.iloc[0]
+top_region_row = summary_region_revenue.iloc[0]
+top_channel_row = summary_channel_revenue.iloc[0]
+lowest_satisfaction_row = summary_segment_satisfaction.iloc[-1]
 
 top_segment_share = (
     top_segment_row["PurchaseAmount"] / total_revenue * 100
