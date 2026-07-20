@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import pandas as pd
@@ -13,6 +12,59 @@ st.set_page_config(
     page_title="NovaRetail Customer Intelligence Dashboard",
     page_icon="📊",
     layout="wide",
+)
+
+# --------------------------------------------------
+# VISUAL THEME
+# --------------------------------------------------
+COLORS = {
+    "revenue": "#4C9BE8",
+    "satisfaction": "#31B57B",
+    "risk": "#E76F51",
+    "opportunity": "#8E7CC3",
+    "neutral": "#7A8A99",
+}
+
+st.markdown(
+    """
+    <style>
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+
+        [data-testid="stMetric"] {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.10);
+            border-radius: 12px;
+            padding: 18px 20px;
+            min-height: 132px;
+        }
+
+        [data-testid="stMetricLabel"] {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        [data-testid="stMetricValue"] {
+            font-size: 2rem;
+        }
+
+        .insight-card {
+            background: rgba(255, 255, 255, 0.04);
+            border-left: 4px solid #4C9BE8;
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 10px;
+        }
+
+        .insight-card strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 
@@ -253,6 +305,27 @@ def revenue_summary(column_name: str) -> pd.DataFrame:
     )
 
 
+def format_chart(
+    figure,
+    *,
+    height: int = 420,
+    show_legend: bool = False,
+):
+    """Apply consistent formatting to Plotly charts."""
+    figure.update_layout(
+        height=height,
+        margin=dict(l=20, r=20, t=65, b=30),
+        showlegend=show_legend,
+        hoverlabel=dict(namelength=-1),
+    )
+    figure.update_traces(
+        marker_line_width=0,
+        textposition="outside",
+        cliponaxis=False,
+    )
+    return figure
+
+
 # --------------------------------------------------
 # CUSTOMER AND SEGMENT ANALYSIS
 # --------------------------------------------------
@@ -279,11 +352,13 @@ with chart_1:
             "PurchaseAmount": "Revenue",
         },
         text_auto=".2s",
+        color_discrete_sequence=[COLORS["revenue"]],
     )
     fig_segment_revenue.update_layout(
         xaxis_title="Behavioral Segment",
         yaxis_title="Revenue ($)",
     )
+    format_chart(fig_segment_revenue)
     st.plotly_chart(fig_segment_revenue, use_container_width=True)
 
 with chart_2:
@@ -297,11 +372,14 @@ with chart_2:
             "CustomerSatisfaction": "Average Satisfaction",
         },
         text_auto=".2f",
+        color_discrete_sequence=[COLORS["satisfaction"]],
     )
     fig_segment_satisfaction.update_layout(
         xaxis_title="Behavioral Segment",
         yaxis_title="Average Satisfaction",
+        yaxis_range=[0, 5.5],
     )
+    format_chart(fig_segment_satisfaction)
     st.plotly_chart(fig_segment_satisfaction, use_container_width=True)
 
 
@@ -317,24 +395,27 @@ customer_revenue = (
 
 top_customers = customer_revenue.head(10).sort_values(
     "TotalRevenue", ascending=True
-)
+).copy()
+top_customers["CustomerLabel"] = "Customer " + top_customers["CustomerID"]
 
 fig_top_customers = px.bar(
     top_customers,
     x="TotalRevenue",
-    y="CustomerID",
+    y="CustomerLabel",
     orientation="h",
     title="Top 10 Customers by Revenue",
     labels={
-        "CustomerID": "Customer ID",
+        "CustomerLabel": "Customer",
         "TotalRevenue": "Total Revenue",
     },
-    text_auto=".2s",
+    text_auto="$.3s",
+    color_discrete_sequence=[COLORS["opportunity"]],
 )
 fig_top_customers.update_layout(
     xaxis_title="Total Revenue ($)",
-    yaxis_title="Customer ID",
+    yaxis_title="",
 )
+format_chart(fig_top_customers, height=440)
 st.plotly_chart(fig_top_customers, use_container_width=True)
 
 
@@ -384,22 +465,30 @@ customer_summary = customer_summary[
     ]
 ]
 
-customer_summary_display = customer_summary.copy()
-customer_summary_display["TotalRevenue"] = customer_summary_display[
-    "TotalRevenue"
-].map("${:,.2f}".format)
-customer_summary_display["AverageOrderValue"] = customer_summary_display[
-    "AverageOrderValue"
-].map("${:,.2f}".format)
-customer_summary_display["AverageSatisfaction"] = customer_summary_display[
-    "AverageSatisfaction"
-].map("{:.2f}".format)
-
 st.markdown("#### Customer Value Table")
 st.dataframe(
-    customer_summary_display,
+    customer_summary,
     use_container_width=True,
     hide_index=True,
+    column_config={
+        "CustomerID": st.column_config.TextColumn("Customer ID"),
+        "TotalRevenue": st.column_config.NumberColumn(
+            "Total Revenue", format="$%.2f"
+        ),
+        "DistinctTransactions": st.column_config.NumberColumn(
+            "Transactions", format="%d"
+        ),
+        "AverageOrderValue": st.column_config.NumberColumn(
+            "Average Order Value", format="$%.2f"
+        ),
+        "AverageSatisfaction": st.column_config.ProgressColumn(
+            "Average Satisfaction",
+            min_value=0,
+            max_value=5,
+            format="%.2f",
+        ),
+        "PrimarySegment": st.column_config.TextColumn("Primary Segment"),
+    },
 )
 
 
@@ -444,27 +533,110 @@ segment_summary = segment_summary.sort_values(
     ["RiskFlag", "AverageSatisfaction", "RevenuePerCustomer"]
 )
 
-segment_summary_display = segment_summary.copy()
-segment_summary_display["TotalRevenue"] = segment_summary_display[
-    "TotalRevenue"
-].map("${:,.2f}".format)
-segment_summary_display["RevenuePerCustomer"] = segment_summary_display[
-    "RevenuePerCustomer"
-].map("${:,.2f}".format)
-segment_summary_display["AverageSatisfaction"] = segment_summary_display[
-    "AverageSatisfaction"
-].map("{:.2f}".format)
-
 st.markdown("#### Segment Risk Assessment")
 st.caption(
     "A segment is flagged when both its average satisfaction and its "
     "revenue per customer fall below the filtered segment medians."
 )
 st.dataframe(
-    segment_summary_display,
+    segment_summary,
     use_container_width=True,
     hide_index=True,
+    column_config={
+        "label": st.column_config.TextColumn("Behavioral Segment"),
+        "TotalRevenue": st.column_config.NumberColumn(
+            "Total Revenue", format="$%.2f"
+        ),
+        "UniqueCustomers": st.column_config.NumberColumn(
+            "Unique Customers", format="%d"
+        ),
+        "DistinctTransactions": st.column_config.NumberColumn(
+            "Transactions", format="%d"
+        ),
+        "AverageSatisfaction": st.column_config.ProgressColumn(
+            "Average Satisfaction",
+            min_value=0,
+            max_value=5,
+            format="%.2f",
+        ),
+        "RevenuePerCustomer": st.column_config.NumberColumn(
+            "Revenue per Customer", format="$%.2f"
+        ),
+        "RiskFlag": st.column_config.TextColumn("Assessment"),
+    },
 )
+
+
+# --------------------------------------------------
+# DYNAMIC KEY INSIGHTS
+# --------------------------------------------------
+st.divider()
+st.subheader("Key Insights")
+
+top_segment_row = segment_revenue.iloc[0]
+top_region_row = revenue_summary("CustomerRegion").iloc[0]
+top_channel_row = revenue_summary("RetailChannel").iloc[0]
+lowest_satisfaction_row = segment_satisfaction.iloc[-1]
+
+top_segment_share = (
+    top_segment_row["PurchaseAmount"] / total_revenue * 100
+    if total_revenue
+    else 0
+)
+top_region_share = (
+    top_region_row["PurchaseAmount"] / total_revenue * 100
+    if total_revenue
+    else 0
+)
+
+insight_1, insight_2 = st.columns(2)
+
+with insight_1:
+    st.markdown(
+        f"""
+        <div class="insight-card">
+            <strong>Leading customer segment</strong>
+            {top_segment_row["label"]} generated
+            ${top_segment_row["PurchaseAmount"]:,.2f}, representing
+            {top_segment_share:.1f}% of filtered revenue.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div class="insight-card">
+            <strong>Regional opportunity</strong>
+            {top_region_row["CustomerRegion"]} is the strongest region at
+            ${top_region_row["PurchaseAmount"]:,.2f}
+            ({top_region_share:.1f}% of revenue).
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+with insight_2:
+    st.markdown(
+        f"""
+        <div class="insight-card">
+            <strong>Channel performance</strong>
+            {top_channel_row["RetailChannel"]} is the leading retail channel,
+            generating ${top_channel_row["PurchaseAmount"]:,.2f}.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f"""
+        <div class="insight-card">
+            <strong>Retention focus</strong>
+            {lowest_satisfaction_row["label"]} has the lowest average
+            satisfaction score at
+            {lowest_satisfaction_row["CustomerSatisfaction"]:.2f} out of 5.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # --------------------------------------------------
@@ -507,11 +679,13 @@ with growth_chart_2:
             "PurchaseAmount": "Revenue",
         },
         text_auto=".2s",
+        color_discrete_sequence=[COLORS["revenue"]],
     )
     fig_region.update_layout(
         xaxis_title="Customer Region",
         yaxis_title="Revenue ($)",
     )
+    format_chart(fig_region, height=500)
     st.plotly_chart(fig_region, use_container_width=True)
 
 fig_channel = px.bar(
@@ -524,11 +698,13 @@ fig_channel = px.bar(
         "PurchaseAmount": "Revenue",
     },
     text_auto=".2s",
+    color_discrete_sequence=[COLORS["satisfaction"]],
 )
 fig_channel.update_layout(
     xaxis_title="Retail Channel",
     yaxis_title="Revenue ($)",
 )
+format_chart(fig_channel, height=400)
 st.plotly_chart(fig_channel, use_container_width=True)
 
 
@@ -553,11 +729,18 @@ fig_monthly = px.line(
         "RevenueMonth": "Month",
         "PurchaseAmount": "Revenue",
     },
+    color_discrete_sequence=[COLORS["revenue"]],
 )
 fig_monthly.update_layout(
     xaxis_title="Month",
     yaxis_title="Revenue ($)",
+    xaxis_tickformat="%b %Y",
 )
+fig_monthly.update_traces(
+    line_width=3,
+    marker_size=9,
+)
+format_chart(fig_monthly, height=400)
 st.plotly_chart(fig_monthly, use_container_width=True)
 
 
